@@ -3,6 +3,10 @@ import { Avatar } from './Avatar';
 import { CSVUploader } from './CSVUploader';
 import type { CSVRow } from './CSVUploader';
 import { Pencil, Trash2 } from 'lucide-react';
+import { useAutosave } from '../hooks/useAutosave';
+import { AutosaveIndicator } from './AutosaveIndicator';
+
+const AUTOSAVE_KEY = 'employee-add-draft';
 
 interface Employee {
   id: string;
@@ -88,21 +92,40 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
   };
 
   // Add Modal (simple inline for demo)
-  const [newEmployee, setNewEmployee] = useState<Employee>({
-    id: '',
-    name: '',
-    email: '',
-    position: '',
-    wallet: '',
-    salary: 0,
-    status: 'Active',
+  const [newEmployee, setNewEmployee] = useState<Employee>(() => {
+    try {
+      const saved = localStorage.getItem(AUTOSAVE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as Employee;
+        if (parsed && typeof parsed.name === 'string') {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore corrupt data
+    }
+    return {
+      id: '',
+      name: '',
+      email: '',
+      position: '',
+      wallet: '',
+      salary: 0,
+      status: 'Active',
+    };
   });
+
+  const { saving, lastSaved, clearSavedData } = useAutosave<Employee>(
+    AUTOSAVE_KEY,
+    newEmployee
+  );
 
   const handleAddModalSubmit = () => {
     onAddEmployee({
       ...newEmployee,
       id: String(Date.now() + Math.random()),
     });
+    clearSavedData();
     setNewEmployee({
       id: '',
       name: '',
@@ -301,7 +324,10 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
       {showAddModal && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold mb-4">Add Employee</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">Add Employee</h2>
+              <AutosaveIndicator saving={saving} lastSaved={lastSaved} />
+            </div>
             <input
               type="text"
               placeholder="Name"
@@ -349,7 +375,10 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
             </select>
             <div className="flex justify-end gap-2">
               <button
-                onClick={() => setShowAddModal(false)}
+                onClick={() => {
+                  clearSavedData();
+                  setShowAddModal(false);
+                }}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded"
               >
                 Cancel

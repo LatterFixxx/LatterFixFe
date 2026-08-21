@@ -1,4 +1,8 @@
 import React, { useState } from 'react';
+import { useAutosave } from '../hooks/useAutosave';
+import { AutosaveIndicator } from './AutosaveIndicator';
+
+const AUTOSAVE_KEY = 'scheduling-wizard-config';
 
 interface EmployeePreference {
   id: string;
@@ -15,6 +19,16 @@ interface SchedulingConfig {
   preferences: EmployeePreference[];
 }
 
+const defaultConfig: SchedulingConfig = {
+  frequency: 'monthly',
+  dayOfMonth: 1,
+  timeOfDay: '09:00',
+  preferences: [
+    { id: '1', name: 'Alice', amount: '1000', currency: 'USDC' },
+    { id: '2', name: 'Bob', amount: '1500', currency: 'XLM' },
+  ], // Mock employees for now
+};
+
 export const SchedulingWizard = ({
   onComplete,
   onCancel,
@@ -23,15 +37,26 @@ export const SchedulingWizard = ({
   onCancel: () => void;
 }) => {
   const [step, setStep] = useState(1);
-  const [config, setConfig] = useState<SchedulingConfig>({
-    frequency: 'monthly',
-    dayOfMonth: 1,
-    timeOfDay: '09:00',
-    preferences: [
-      { id: '1', name: 'Alice', amount: '1000', currency: 'USDC' },
-      { id: '2', name: 'Bob', amount: '1500', currency: 'XLM' },
-    ], // Mock employees for now
+  const [config, setConfig] = useState<SchedulingConfig>(() => {
+    // Restore draft from localStorage if available
+    try {
+      const saved = localStorage.getItem(AUTOSAVE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved) as SchedulingConfig;
+        if (parsed && typeof parsed.frequency === 'string') {
+          return parsed;
+        }
+      }
+    } catch {
+      // Ignore corrupt data
+    }
+    return defaultConfig;
   });
+
+  const { saving, lastSaved, clearSavedData } = useAutosave<SchedulingConfig>(
+    AUTOSAVE_KEY,
+    config
+  );
 
   const handleNext = () => setStep((s: number) => Math.min(s + 1, 3));
   const handleBack = () => setStep((s: number) => Math.max(s - 1, 1));
@@ -64,11 +89,14 @@ export const SchedulingWizard = ({
     <div className="card glass noise w-full p-6 sm:p-8 flex flex-col gap-6">
       {/* Wizard Header */}
       <div className="flex justify-between items-center border-b border-hi pb-4">
-        <h2 className="text-xl font-black">
-          {step === 1 && 'Step 1: Set Schedule'}
-          {step === 2 && 'Step 2: Currency Preferences'}
-          {step === 3 && 'Step 3: Preview & Confirm'}
-        </h2>
+        <div className="flex flex-col gap-1">
+          <h2 className="text-xl font-black">
+            {step === 1 && 'Step 1: Set Schedule'}
+            {step === 2 && 'Step 2: Currency Preferences'}
+            {step === 3 && 'Step 3: Preview & Confirm'}
+          </h2>
+          <AutosaveIndicator saving={saving} lastSaved={lastSaved} />
+        </div>
         <div className="flex gap-2">
           {[1, 2, 3].map((i) => (
             <div
@@ -272,7 +300,14 @@ export const SchedulingWizard = ({
       <div className="flex justify-between items-center mt-4 border-t border-hi pt-6">
         <button
           className={`py-2 px-6 rounded-lg font-bold text-sm tracking-wide transition-colors ${step === 1 ? 'text-muted hover:text-text' : 'bg-surface hover:bg-hi/50 text-text'}`}
-          onClick={step === 1 ? onCancel : handleBack}
+          onClick={() => {
+            if (step === 1) {
+              clearSavedData();
+              onCancel();
+            } else {
+              handleBack();
+            }
+          }}
         >
           {step === 1 ? 'Cancel' : 'Back'}
         </button>
@@ -287,7 +322,10 @@ export const SchedulingWizard = ({
         ) : (
           <button
             className="py-2 px-6 rounded-lg bg-success text-bg font-bold text-sm tracking-wide hover:brightness-110 shadow-lg shadow-success/20 transition-all flex items-center gap-2"
-            onClick={() => onComplete(config)}
+            onClick={() => {
+              clearSavedData();
+              onComplete(config);
+            }}
           >
             Confirm Schedule
             <svg
