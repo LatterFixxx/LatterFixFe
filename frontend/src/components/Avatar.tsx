@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { MD5 } from 'crypto-js';
 
 interface AvatarProps {
@@ -7,6 +7,7 @@ interface AvatarProps {
   imageUrl?: string;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  gravatarSize?: number;
 }
 
 export const Avatar: React.FC<AvatarProps> = ({
@@ -15,7 +16,10 @@ export const Avatar: React.FC<AvatarProps> = ({
   imageUrl,
   size = 'md',
   className = '',
+  gravatarSize = 400,
 }) => {
+  const [imgFailed, setImgFailed] = useState(false);
+
   const sizeClasses = {
     sm: 'w-7 h-7 text-xs',
     md: 'w-10 h-10 text-sm',
@@ -24,7 +28,7 @@ export const Avatar: React.FC<AvatarProps> = ({
 
   const getGravatarUrl = (email: string) => {
     const hash = MD5(email.toLowerCase().trim()).toString();
-    return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=400`;
+    return `https://www.gravatar.com/avatar/${hash}?d=identicon&s=${gravatarSize}`;
   };
 
   const avatarUrl = imageUrl || getGravatarUrl(email);
@@ -32,24 +36,28 @@ export const Avatar: React.FC<AvatarProps> = ({
     .split(' ')
     .map((n) => n[0])
     .join('')
-    .toUpperCase();
+    .toUpperCase()
+    .slice(0, 2);
+
+  // Reset failure state when the source changes so a recovered URL renders again.
+  React.useEffect(() => {
+    setImgFailed(false);
+  }, [avatarUrl]);
 
   return (
     <div
-      className={`${sizeClasses[size]} ${className} rounded-full overflow-hidden bg-gray-300 flex items-center justify-center shrink-0`}
+      className={`${sizeClasses[size]} ${className} rounded-full overflow-hidden bg-linear-to-br from-blue-400 to-blue-600 flex items-center justify-center shrink-0 text-white font-semibold`}
       title={name}
     >
-      <img
-        src={avatarUrl}
-        alt={name}
-        className="w-full h-full object-cover"
-        onError={(e) => {
-          e.currentTarget.style.display = 'none';
-        }}
-      />
-      <span className="bg-linear-to-br from-blue-400 to-blue-600 text-white font-semibold hidden">
-        {initials}
-      </span>
+      {!imgFailed && (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      )}
+      {imgFailed && <span aria-hidden="true">{initials || 'U'}</span>}
     </div>
   );
 };

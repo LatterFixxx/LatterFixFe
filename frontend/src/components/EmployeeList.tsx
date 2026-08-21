@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { Avatar } from './Avatar';
 import { CSVUploader } from './CSVUploader';
 import type { CSVRow } from './CSVUploader';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Trash2, Camera } from 'lucide-react';
+import { resizeImage } from '../utils/imageOptimization';
 
 interface Employee {
   id: string;
@@ -92,11 +93,32 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
     id: '',
     name: '',
     email: '',
+    imageUrl: '',
     position: '',
     wallet: '',
     salary: 0,
     status: 'Active',
   });
+  const [uploadingEmployeeAvatar, setUploadingEmployeeAvatar] = useState(false);
+  const employeeFileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleEmployeeAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingEmployeeAvatar(true);
+    try {
+      const resizedBlob = await resizeImage(file, 200, 200);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewEmployee((prev) => ({ ...prev, imageUrl: reader.result as string }));
+        setUploadingEmployeeAvatar(false);
+      };
+      reader.onerror = () => setUploadingEmployeeAvatar(false);
+      reader.readAsDataURL(resizedBlob);
+    } catch {
+      setUploadingEmployeeAvatar(false);
+    }
+  };
 
   const handleAddModalSubmit = () => {
     onAddEmployee({
@@ -302,6 +324,43 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-lg font-bold mb-4">Add Employee</h2>
+            <div className="flex items-center gap-4 mb-4">
+              <div className="relative shrink-0">
+                <Avatar
+                  email={newEmployee.email || 'employee@latterfix.app'}
+                  name={newEmployee.name || 'Employee'}
+                  imageUrl={newEmployee.imageUrl}
+                  size="md"
+                />
+                {uploadingEmployeeAvatar ? (
+                  <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => employeeFileInputRef.current?.click()}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-blue-500 border-2 border-white flex items-center justify-center hover:scale-110 transition-transform"
+                    title="Upload avatar"
+                  >
+                    <Camera className="w-3 h-3 text-white" />
+                  </button>
+                )}
+                <input
+                  ref={employeeFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleEmployeeAvatarUpload}
+                  disabled={uploadingEmployeeAvatar}
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                Upload a profile photo. If none is set,
+                <br />
+                Gravatar will be used based on email.
+              </p>
+            </div>
             <input
               type="text"
               placeholder="Name"

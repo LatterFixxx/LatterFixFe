@@ -26,6 +26,7 @@ import { useWallet } from '../hooks/useWallet';
 import { useHorizonAccount } from '../hooks/useHorizonAccount';
 import { getExplorerUrl } from '../services/stellar';
 import { fetchNetworkFeeStats, type NetworkFeeStats } from '../services/transactionHistory';
+import { Avatar } from './Avatar';
 
 const AppNav: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -371,9 +372,12 @@ const AppNav: React.FC = () => {
 
         {/* Profile card */}
         <div className="px-3 py-1.5 bg-white/5 rounded-xl border border-white/5 flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-linear-to-tr from-accent to-accent2 flex items-center justify-center font-black text-[10px] text-black">
-            {currentUser.username.substring(0, 2).toUpperCase()}
-          </div>
+          <Avatar
+            email={currentUser.email || `${currentUser.username}@latterfix.app`}
+            name={currentUser.username}
+            imageUrl={currentUser.avatarUrl}
+            size="sm"
+          />
           <div className="hidden sm:block text-left">
             <p className="text-[10px] font-extrabold text-white leading-none mb-0.5">
               {currentUser.username}

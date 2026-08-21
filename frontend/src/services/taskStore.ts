@@ -38,6 +38,8 @@ export interface UserProfile {
   earnings: number;
   tasksCompleted: number;
   role: 'Creator' | 'Contributor' | 'Admin';
+  email?: string;
+  avatarUrl?: string;
 }
 
 interface GovernanceConfig {
@@ -80,7 +82,9 @@ interface TaskState {
   updateProfile: (
     username: string,
     address: string,
-    role: 'Creator' | 'Contributor' | 'Admin'
+    role: 'Creator' | 'Contributor' | 'Admin',
+    avatarUrl?: string,
+    email?: string
   ) => void;
   setPlatformFee: (feeBps: number) => void;
   togglePause: () => void;
@@ -564,13 +568,15 @@ export const useTaskStore = create<TaskState>()(
         });
       },
 
-      updateProfile: (username, address, role) => {
+      updateProfile: (username, address, role, avatarUrl, email) => {
         set((state) => ({
           currentUser: {
             ...state.currentUser,
             username,
             address,
             role,
+            ...(avatarUrl !== undefined ? { avatarUrl } : {}),
+            ...(email !== undefined ? { email } : {}),
           },
         }));
       },

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ExternalLink, Star, CheckCircle, Loader2, User, Zap, Award } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ExternalLink, Star, CheckCircle, Loader2, User, Zap, Award, Camera } from 'lucide-react';
 import { useWallet } from '../hooks/useWallet';
 import { useHorizonAccount } from '../hooks/useHorizonAccount';
 import { getExplorerUrl } from '../services/stellar';
@@ -10,16 +10,21 @@ import {
   type SorobanUserProfile,
 } from '../services/sorobanTaskContract';
 import { useTaskStore } from '../services/taskStore';
+import { Avatar } from '../components/Avatar';
+import { resizeImage } from '../utils/imageOptimization';
 
 export default function Profile() {
   const { address, connect } = useWallet();
   const { balances, isLoading: balancesLoading, accountExists } = useHorizonAccount(address);
-  const { currentUser } = useTaskStore();
+  const { currentUser, updateProfile } = useTaskStore();
 
   const [onChainProfile, setOnChainProfile] = useState<SorobanUserProfile | null>(null);
   const [reputation, setReputation] = useState<number | null>(null);
   const [tier, setTier] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!address) return;
@@ -35,6 +40,34 @@ export default function Profile() {
       setLoading(false);
     });
   }, [address]);
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    setAvatarError(null);
+    try {
+      const resizedBlob = await resizeImage(file, 400, 400);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const dataUrl = reader.result as string;
+        updateProfile(currentUser.username, currentUser.address, currentUser.role, dataUrl, currentUser.email);
+        setUploadingAvatar(false);
+      };
+      reader.onerror = () => {
+        setAvatarError('Failed to read image file');
+        setUploadingAvatar(false);
+      };
+      reader.readAsDataURL(resizedBlob);
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Upload failed');
+      setUploadingAvatar(false);
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    updateProfile(currentUser.username, currentUser.address, currentUser.role, '', currentUser.email);
+  };
 
   const tierColor = (t: string) => {
     const map: Record<string, string> = {
@@ -84,9 +117,49 @@ export default function Profile() {
         <>
           {/* Address card */}
           <div className="card glass noise p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-            <div className="w-16 h-16 rounded-2xl bg-linear-to-tr from-accent to-accent2 flex items-center justify-center font-black text-2xl text-black shrink-0">
-              {(onChainProfile?.username ?? currentUser.username).slice(0, 2).toUpperCase()}
+            <div className="relative shrink-0">
+              <Avatar
+                email={currentUser.email || `${currentUser.username}@latterfix.app`}
+                name={currentUser.username}
+                imageUrl={currentUser.avatarUrl}
+                size="lg"
+                gravatarSize={400}
+              />
+              {/* Upload overlay */}
+              {uploadingAvatar ? (
+                <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 text-white animate-spin" />
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-accent border-2 border-[var(--bg)] flex items-center justify-center hover:scale-110 transition-transform"
+                  title="Upload avatar"
+                >
+                  <Camera className="w-3.5 h-3.5 text-black" />
+                </button>
+              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
+                disabled={uploadingAvatar}
+              />
+              {currentUser.avatarUrl && (
+                <button
+                  onClick={handleRemoveAvatar}
+                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 border-2 border-[var(--bg)] flex items-center justify-center hover:scale-110 transition-transform text-[10px] font-bold text-white"
+                  title="Remove avatar"
+                >
+                  ✕
+                </button>
+              )}
             </div>
+            {avatarError && (
+              <p className="text-red-400 text-xs">{avatarError}</p>
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-xl font-black text-white">
                 {onChainProfile?.username ?? currentUser.username}
