@@ -1,14 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   History,
   Search,
   Filter,
+  X,
   ExternalLink,
   Loader2,
   RefreshCw,
   Zap,
   Activity,
   AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
+  Users,
 } from 'lucide-react';
 import { useTaskStore } from '../services/taskStore';
 import { useWallet } from '../hooks/useWallet';
@@ -33,7 +38,70 @@ export default function PaymentHistory() {
   const { address, connect } = useWallet();
 
   const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'All' | 'Funding' | 'Payout' | 'Fee'>('All');
+  const [categoryFilters, setCategoryFilters] = useState<('Funding' | 'Payout' | 'Fee')[]>([]);
+  const [dateRange, setDateRange] = useState<{ from: string; to: string }>({ from: '', to: '' });
+  const [employeeQuery, setEmployeeQuery] = useState('');
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+
+  // ── Active filter count ──
+  const activeFilterCount =
+    categoryFilters.length +
+    (dateRange.from ? 1 : 0) +
+    (dateRange.to ? 1 : 0) +
+    (employeeQuery.trim() ? 1 : 0);
+
+  // ── Unique employee addresses for suggestions ──
+  const employeeSuggestions = useMemo(() => {
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const p of payments) {
+      if (!seen.has(p.sender)) {
+        seen.add(p.sender);
+        result.push(p.sender);
+      }
+      if (!seen.has(p.recipient)) {
+        seen.add(p.recipient);
+        result.push(p.recipient);
+      }
+    }
+    return result.slice(0, 20);
+  }, [payments]);
+
+  // ── Clear all filters ──
+  const clearAllFilters = () => {
+    setCategoryFilters([]);
+    setDateRange({ from: '', to: '' });
+    setEmployeeQuery('');
+    setSearch('');
+  };
+
+  const removeCategory = (cat: 'Funding' | 'Payout' | 'Fee') => {
+    setCategoryFilters((prev) => prev.filter((c) => c !== cat));
+  };
+
+  // Local payments filter
+  const filteredPayments = payments.filter((pay) => {
+    const matchesSearch =
+      pay.taskTitle.toLowerCase().includes(search.toLowerCase()) ||
+      pay.txHash.toLowerCase().includes(search.toLowerCase());
+
+    const matchesCategory = categoryFilters.length === 0 || categoryFilters.includes(pay.type);
+
+    const matchesEmployee =
+      !employeeQuery.trim() ||
+      pay.recipient.toLowerCase().includes(employeeQuery.trim().toLowerCase()) ||
+      pay.sender.toLowerCase().includes(employeeQuery.trim().toLowerCase());
+
+    let matchesDate = true;
+    if (dateRange.from) {
+      matchesDate = matchesDate && pay.timestamp >= `${dateRange.from} 00:00:00`;
+    }
+    if (dateRange.to) {
+      matchesDate = matchesDate && pay.timestamp <= `${dateRange.to} 23:59:59`;
+    }
+
+    return matchesSearch && matchesCategory && matchesEmployee && matchesDate;
+  });
 
   // Live on-chain state
   const [onChainTxs, setOnChainTxs] = useState<HorizonTransaction[]>([]);
@@ -44,15 +112,6 @@ export default function PaymentHistory() {
   const [onChainError, setOnChainError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'local' | 'onchain' | 'events' | 'claims'>('local');
-
-  // Local payments filter
-  const filteredPayments = payments.filter((pay) => {
-    const matchesSearch =
-      pay.taskTitle.toLowerCase().includes(search.toLowerCase()) ||
-      pay.txHash.toLowerCase().includes(search.toLowerCase());
-    const matchesType = typeFilter === 'All' || pay.type === typeFilter;
-    return matchesSearch && matchesType;
-  });
 
   // Load live fee stats on mount
   useEffect(() => {
@@ -210,33 +269,189 @@ export default function PaymentHistory() {
       {/* LOCAL TAB */}
       {activeTab === 'local' && (
         <>
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5">
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
-              <input
-                type="text"
-                placeholder="Search by task title or tx hash..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-black/25 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40"
-              />
-            </div>
-            <div className="flex items-center gap-2 w-full md:w-auto">
-              <Filter className="w-4 h-4 text-muted mr-1 hidden sm:block" />
-              {(['All', 'Funding', 'Payout', 'Fee'] as const).map((type) => (
+          <div className="flex flex-col gap-3 bg-white/5 p-4 rounded-2xl border border-white/5">
+            {/* Search row */}
+            <div className="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+              <div className="relative w-full md:w-80">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <input
+                  type="text"
+                  placeholder="Search by task title or tx hash..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-black/25 border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-accent/40"
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  key={type}
-                  onClick={() => setTypeFilter(type)}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
-                    typeFilter === type
+                  onClick={() => setFiltersExpanded(!filtersExpanded)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition flex items-center gap-1.5 ${
+                    filtersExpanded || activeFilterCount > 0
                       ? 'bg-accent text-bg font-black'
                       : 'bg-white/5 text-muted hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  {type}
+                  <Filter className="w-3.5 h-3.5" />
+                  Filters
+                  {activeFilterCount > 0 && (
+                    <span className="bg-white/20 text-bg text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                  {filtersExpanded ? (
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  )}
                 </button>
-              ))}
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={clearAllFilters}
+                    className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 text-muted hover:text-white hover:bg-white/10 transition flex items-center gap-1"
+                  >
+                    <X className="w-3 h-3" />
+                    Clear all
+                  </button>
+                )}
+              </div>
             </div>
+
+            {/* Expanded filter panel */}
+            {filtersExpanded && (
+              <div className="flex flex-col md:flex-row gap-4 pt-2 border-t border-white/5">
+                {/* Category multi-select */}
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2">
+                    Category
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(['Funding', 'Payout', 'Fee'] as const).map((cat) => {
+                      const selected = categoryFilters.includes(cat);
+                      return (
+                        <button
+                          key={cat}
+                          onClick={() => {
+                            if (selected) {
+                              removeCategory(cat);
+                            } else {
+                              setCategoryFilters((prev) => [...prev, cat]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+                            selected
+                              ? 'bg-accent/20 text-accent border-accent/40'
+                              : 'bg-white/5 text-muted border-white/10 hover:text-white hover:bg-white/10'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Date range */}
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Calendar className="w-3 h-3" /> Date Range
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={dateRange.from}
+                      onChange={(e) => setDateRange((prev) => ({ ...prev, from: e.target.value }))}
+                      className="w-full bg-black/25 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-accent/40"
+                    />
+                    <span className="text-muted text-xs">—</span>
+                    <input
+                      type="date"
+                      value={dateRange.to}
+                      onChange={(e) => setDateRange((prev) => ({ ...prev, to: e.target.value }))}
+                      className="w-full bg-black/25 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-accent/40"
+                    />
+                  </div>
+                </div>
+
+                {/* Employee name filter */}
+                <div className="flex-1">
+                  <p className="text-[10px] font-bold text-muted uppercase tracking-wider mb-2 flex items-center gap-1">
+                    <Users className="w-3 h-3" /> Address
+                  </p>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      list="employee-suggestions"
+                      placeholder="Filter by sender or recipient..."
+                      value={employeeQuery}
+                      onChange={(e) => setEmployeeQuery(e.target.value)}
+                      className="w-full bg-black/25 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-accent/40"
+                    />
+                    <datalist id="employee-suggestions">
+                      {employeeSuggestions.map((addr) => (
+                        <option key={addr} value={addr} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Active filter chips */}
+            {activeFilterCount > 0 && (
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {categoryFilters.map((cat) => (
+                  <span
+                    key={cat}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/15 text-accent text-[10px] font-semibold"
+                  >
+                    {cat}
+                    <button
+                      onClick={() => removeCategory(cat)}
+                      className="hover:text-white transition"
+                      aria-label={`Remove ${cat} filter`}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                {dateRange.from && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/15 text-accent text-[10px] font-semibold">
+                    From: {dateRange.from}
+                    <button
+                      onClick={() => setDateRange((prev) => ({ ...prev, from: '' }))}
+                      className="hover:text-white transition"
+                      aria-label="Remove from date filter"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {dateRange.to && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/15 text-accent text-[10px] font-semibold">
+                    To: {dateRange.to}
+                    <button
+                      onClick={() => setDateRange((prev) => ({ ...prev, to: '' }))}
+                      className="hover:text-white transition"
+                      aria-label="Remove to date filter"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+                {employeeQuery.trim() && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-accent/15 text-accent text-[10px] font-semibold">
+                    Address: {employeeQuery.trim()}
+                    <button
+                      onClick={() => setEmployeeQuery('')}
+                      className="hover:text-white transition"
+                      aria-label="Remove address filter"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="card glass noise p-0 overflow-hidden">
