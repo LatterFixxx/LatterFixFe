@@ -71,7 +71,7 @@ const AppNav: React.FC = () => {
           ? 'bg-red-400'
           : 'bg-white/20';
 
-  const navLinks = (
+  const renderNavLinks = (withTourIds: boolean) => (
     <>
       <NavLink
         to="/dashboard"
@@ -194,6 +194,7 @@ const AppNav: React.FC = () => {
       </NavLink>
 
       <NavLink
+        id={withTourIds ? 'tour-employees' : undefined}
         to="/bulk-payments"
         className={({ isActive }) =>
           `flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition touch-target ${
@@ -304,11 +305,14 @@ const AppNav: React.FC = () => {
     </>
   );
 
+  const desktopNavLinks = renderNavLinks(true);
+  const mobileNavLinks = renderNavLinks(false);
+
   return (
     <nav className="relative w-full flex items-center justify-between">
       <div className="flex items-center gap-2">
         {/* Desktop links */}
-        <div className="hidden lg:flex items-center gap-2">{navLinks}</div>
+        <div className="hidden lg:flex items-center gap-2">{desktopNavLinks}</div>
 
         {/* Mobile menu button */}
         <button
@@ -441,7 +445,7 @@ const AppNav: React.FC = () => {
       {mobileOpen && (
         <div className="lg:hidden absolute left-0 right-0 top-full z-40 bg-slate-900 border border-white/5 shadow-2xl rounded-xl mt-2 overflow-hidden animate-slide-down">
           <div className="px-4 py-3 flex flex-col gap-2 bg-slate-950">
-            {navLinks}
+            {mobileNavLinks}
 
             {/* Mobile wallet section */}
             <div className="border-t border-white/5 my-2 pt-3 space-y-2">

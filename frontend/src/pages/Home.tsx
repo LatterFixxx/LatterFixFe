@@ -108,7 +108,10 @@ export default function Home() {
   return (
     <div className="space-y-8 page-fade">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-slate-900 via-purple-950 to-slate-900 border border-white/5 p-8 sm:p-10 shadow-2xl">
+      <div
+        id="tour-welcome"
+        className="relative overflow-hidden rounded-3xl bg-linear-to-r from-slate-900 via-purple-950 to-slate-900 border border-white/5 p-8 sm:p-10 shadow-2xl"
+      >
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_50%,rgba(124,111,247,0.15),transparent_45%)]" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="max-w-2xl">

@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import ConnectAccount from '../components/ConnectAccount';
 import AppNav from './AppNav';
 import ThemeToggle from './ThemeToggle';
 import TestnetBanner from './TestnetBanner';
+import { OnboardingTour } from './OnboardingTour';
+import { useTaskStore } from '../services/taskStore';
 
 // ── Page Wrapper ───────────────────────
 const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
@@ -13,12 +15,35 @@ const PageWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 // ── Layout ────────────────────────────
 const AppLayout: React.FC = () => {
   const location = useLocation();
+  const { currentUser, completeOnboarding } = useTaskStore();
+  const [tourActive, setTourActive] = useState(false);
+
+  // New admins auto-start the onboarding tour once they land on the
+  // dashboard. Once running, it stays active across the pages it visits
+  // (e.g. Bulk Payments) until the admin finishes or skips it — it must not
+  // be re-gated to the dashboard route or it would stop mid-tour.
+  useEffect(() => {
+    if (
+      location.pathname === '/dashboard' &&
+      currentUser.role === 'Admin' &&
+      !currentUser.hasCompletedOnboarding &&
+      !tourActive
+    ) {
+      setTourActive(true);
+    }
+  }, [location.pathname, currentUser.role, currentUser.hasCompletedOnboarding, tourActive]);
+
+  const handleTourComplete = () => {
+    setTourActive(false);
+    completeOnboarding();
+  };
 
   return (
     <div
       className="flex flex-col min-h-screen"
       style={{ background: 'var(--bg)', color: 'var(--text)' }}
     >
+      <OnboardingTour run={tourActive} onComplete={handleTourComplete} />
       {/* Header */}
       <header
         className="fixed top-0 left-0 right-0 z-50 h-(--header-h) items-center flex justify-between header-padding backdrop-blur-[20px] backdrop-saturate-180 border-b"

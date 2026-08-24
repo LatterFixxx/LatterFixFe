@@ -38,6 +38,7 @@ export interface UserProfile {
   earnings: number;
   tasksCompleted: number;
   role: 'Creator' | 'Contributor' | 'Admin';
+  hasCompletedOnboarding: boolean;
 }
 
 interface GovernanceConfig {
@@ -82,6 +83,8 @@ interface TaskState {
     address: string,
     role: 'Creator' | 'Contributor' | 'Admin'
   ) => void;
+  completeOnboarding: () => void;
+  restartOnboarding: () => void;
   setPlatformFee: (feeBps: number) => void;
   togglePause: () => void;
   resetAll: () => void;
@@ -204,6 +207,7 @@ export const useTaskStore = create<TaskState>()(
         earnings: 1450,
         tasksCompleted: 4,
         role: 'Contributor',
+        hasCompletedOnboarding: false,
       },
       governance: {
         initialized: true,
@@ -575,6 +579,24 @@ export const useTaskStore = create<TaskState>()(
         }));
       },
 
+      completeOnboarding: () => {
+        set((state) => ({
+          currentUser: {
+            ...state.currentUser,
+            hasCompletedOnboarding: true,
+          },
+        }));
+      },
+
+      restartOnboarding: () => {
+        set((state) => ({
+          currentUser: {
+            ...state.currentUser,
+            hasCompletedOnboarding: false,
+          },
+        }));
+      },
+
       setPlatformFee: (feeBps) => {
         set((state) => ({
           governance: {
@@ -603,6 +625,7 @@ export const useTaskStore = create<TaskState>()(
             earnings: 1450,
             tasksCompleted: 4,
             role: 'Contributor',
+            hasCompletedOnboarding: false,
           },
           governance: {
             initialized: true,
