@@ -4,7 +4,7 @@ import { CSVUploader } from './CSVUploader';
 import type { CSVRow } from './CSVUploader';
 import { Pencil, Trash2 } from 'lucide-react';
 
-interface Employee {
+export interface Employee {
   id: string;
   name: string;
   email: string;
@@ -140,6 +140,12 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
     <div className="w-full card glass noise overflow-hidden p-0">
       <div className="flex justify-between items-center p-6">
         <span className="font-bold text-lg">Employees</span>
+        <button
+          onClick={() => setShowAddModal(true)}
+          className="px-4 py-2 bg-accent text-bg font-bold rounded-lg text-sm hover:brightness-110 transition"
+        >
+          + Add Employee
+        </button>
       </div>
       <table className="w-full text-left border-collapse">
         <thead>

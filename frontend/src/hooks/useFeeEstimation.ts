@@ -2,18 +2,21 @@
  * useFeeEstimation Hook
  *
  * React Query hook that polls Horizon fee statistics every 10 seconds and
- * exposes a processed fee recommendation plus a batch estimator helper.
- *
- * Issue: https://github.com/Gildado/PayD/issues/42
+ * exposes a processed fee recommendation plus a batch estimator helper. Also
+ * exposes a comprehensive preflight balance check for a payroll batch,
+ * ahead of submission.
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   getFeeRecommendation,
   estimateBatchPaymentBudget,
+  runPreflightCheck,
   type FeeRecommendation,
   type BatchBudgetEstimate,
+  type PreflightBatchItem,
+  type PreflightCheckResult,
 } from '../services/feeEstimation';
 
 /** Query key used by React Query for cache management */
@@ -44,6 +47,41 @@ export function useFeeEstimation() {
     return estimateBatchPaymentBudget(count);
   }, []);
 
+  // ---- Preflight balance check ----
+  const [preflightResult, setPreflightResult] = useState<PreflightCheckResult | null>(null);
+  const [isPreflightRunning, setIsPreflightRunning] = useState(false);
+  const [preflightError, setPreflightError] = useState<Error | null>(null);
+  const lastPreflightArgs = useRef<{ orgWallet: string; batch: PreflightBatchItem[] } | null>(
+    null
+  );
+
+  const runPreflight = useCallback(
+    async (orgWallet: string, batch: PreflightBatchItem[]): Promise<PreflightCheckResult> => {
+      lastPreflightArgs.current = { orgWallet, batch };
+      setIsPreflightRunning(true);
+      setPreflightError(null);
+      try {
+        const result = await runPreflightCheck(orgWallet, batch);
+        setPreflightResult(result);
+        return result;
+      } catch (err) {
+        const error = err instanceof Error ? err : new Error('Preflight check failed');
+        setPreflightError(error);
+        throw error;
+      } finally {
+        setIsPreflightRunning(false);
+      }
+    },
+    []
+  );
+
+  /** Re-runs the preflight check against the same batch — no page reload needed. */
+  const rerunPreflight = useCallback((): Promise<PreflightCheckResult> | null => {
+    if (!lastPreflightArgs.current) return null;
+    const { orgWallet, batch } = lastPreflightArgs.current;
+    return runPreflight(orgWallet, batch);
+  }, [runPreflight]);
+
   return {
     feeRecommendation,
     isLoading,
@@ -51,5 +89,10 @@ export function useFeeEstimation() {
     error,
     refetch,
     estimateBatch,
+    preflightResult,
+    isPreflightRunning,
+    preflightError,
+    runPreflight,
+    rerunPreflight,
   };
 }
