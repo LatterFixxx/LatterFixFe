@@ -15,6 +15,8 @@ import {
   type FeeRecommendation,
   type BatchBudgetEstimate,
 } from '../services/feeEstimation';
+import { runPreflightCheck, type PreflightResult } from '../services/preflightCheck';
+import type { PayrollRecipientStatus } from '../services/bulkPaymentStatus';
 
 /** Query key used by React Query for cache management */
 const FEE_ESTIMATION_QUERY_KEY = ['fee-estimation'] as const;
@@ -44,6 +46,19 @@ export function useFeeEstimation() {
     return estimateBatchPaymentBudget(count);
   }, []);
 
+  const runPreflight = useCallback(
+    async (
+      orgPublicKey: string,
+      assetCode: string,
+      assetIssuer: string | null,
+      totalAmount: string,
+      recipients: PayrollRecipientStatus[]
+    ): Promise<PreflightResult> => {
+      return runPreflightCheck(orgPublicKey, assetCode, assetIssuer, totalAmount, recipients);
+    },
+    []
+  );
+
   return {
     feeRecommendation,
     isLoading,
@@ -51,5 +66,6 @@ export function useFeeEstimation() {
     error,
     refetch,
     estimateBatch,
+    runPreflight,
   };
 }

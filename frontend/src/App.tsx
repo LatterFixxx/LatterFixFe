@@ -23,6 +23,7 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import BulkPaymentTracker from './pages/BulkPaymentTracker';
 import AdminPanel from './pages/AdminPanel';
 import Debugger from './pages/Debugger';
+import PayrollScheduler from './pages/PayrollScheduler';
 import { contractService } from './services/contracts';
 import { AuthProvider } from './providers/AuthProvider';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -106,6 +107,14 @@ function App() {
               element={
                 <ErrorBoundary fallback={<ErrorFallback title="Debugger Error" />}>
                   <Debugger />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/payroll"
+              element={
+                <ErrorBoundary fallback={<ErrorFallback title="Payroll Scheduler Error" />}>
+                  <PayrollScheduler />
                 </ErrorBoundary>
               }
             />
