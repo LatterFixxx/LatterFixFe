@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNotification } from '../hooks/useNotification';
 import { useRealTimeUpdates } from '../hooks/useRealTimeUpdates';
+import { useFeeEstimation } from '../hooks/useFeeEstimation';
+import { useWallet } from '../hooks/useWallet';
+import { type PreflightResult } from '../services/preflightCheck';
+import { AlertTriangle, CheckCircle2, Download, RefreshCw, PlayCircle } from 'lucide-react';
 import {
   fetchPayrollRuns,
   fetchPayrollRunSummary,
@@ -247,14 +251,84 @@ function FragmentRow({
   hasFailedRecipients,
   onToggleExpand,
 }: FragmentRowProps) {
+  const { address } = useWallet();
+  const { runPreflight } = useFeeEstimation();
+  const [preflightResult, setPreflightResult] = useState<PreflightResult | null>(null);
+  const [isPreflighting, setIsPreflighting] = useState(false);
+
+  const performPreflight = useCallback(async () => {
+    if (!summary || !address || run.status !== 'draft') return;
+    setIsPreflighting(true);
+    try {
+      const result = await runPreflight(
+        address,
+        run.asset_code,
+        run.asset_issuer || null,
+        run.total_amount,
+        summary.items
+      );
+      setPreflightResult(result);
+    } catch (e) {
+      console.error('Preflight error', e);
+    } finally {
+      setIsPreflighting(false);
+    }
+  }, [summary, address, run, runPreflight]);
+
+  // Auto-run on expand if draft and summary is loaded
+  useEffect(() => {
+    if (expanded && run.status === 'draft' && summary && !preflightResult && !isPreflighting) {
+      void performPreflight();
+    }
+  }, [expanded, run.status, summary, preflightResult, isPreflighting, performPreflight]);
+
+  const handleDownloadCsv = () => {
+    if (!preflightResult) return;
+    const rows = [['Employee ID', 'Name', 'Email', 'Amount', 'Failure Reason']];
+    summary?.items.forEach((item) => {
+      const issue = preflightResult.recipientIssues.find((i) => i.employee_id === item.employee_id);
+      if (issue) {
+        rows.push([
+          String(item.employee_id),
+          getEmployeeName(item),
+          item.employee_email || '',
+          item.amount,
+          issue.reason,
+        ]);
+      }
+    });
+
+    const csvContent = rows.map((e) => e.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `preflight_failures_${run.batch_id}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <>
-      <tr className="border-b border-hi/40">
-        <td className="py-3 pr-4 font-mono">{run.batch_id}</td>
-        <td className="py-3 pr-4 capitalize">{run.status}</td>
+      <tr className="border-b border-hi/40 hover:bg-white/5 transition-colors">
+        <td className="py-3 pr-4 font-mono text-xs">{run.batch_id.slice(0, 8)}...</td>
+        <td className="py-3 pr-4 capitalize">
+          <span
+            className={`px-2 py-1 rounded text-xs font-semibold ${
+              run.status === 'draft'
+                ? 'bg-yellow-500/20 text-yellow-400'
+                : run.status === 'completed'
+                  ? 'bg-green-500/20 text-green-400'
+                  : 'bg-accent/20 text-accent'
+            }`}
+          >
+            {run.status}
+          </span>
+        </td>
         <td className="py-3 pr-4">{employeeCount}</td>
-        <td className="py-3 pr-4">
-          {run.total_amount} {run.asset_code}
+        <td className="py-3 pr-4 font-semibold">
+          {run.total_amount} <span className="text-muted text-xs">{run.asset_code}</span>
         </td>
         <td className="py-3 pr-4">{confirmationCount}</td>
         <td className="py-3 pr-4">
@@ -263,12 +337,12 @@ function FragmentRow({
               href={getTxExplorerUrl(txHash)}
               target="_blank"
               rel="noreferrer"
-              className="text-accent"
+              className="text-accent hover:underline text-xs"
             >
               {txHash.slice(0, 10)}...
             </a>
           ) : (
-            <span className="text-muted">N/A</span>
+            <span className="text-muted text-xs">N/A</span>
           )}
         </td>
         <td className="py-3 pr-4">
@@ -276,16 +350,16 @@ function FragmentRow({
             <button
               type="button"
               onClick={onToggleExpand}
-              className="text-accent hover:text-accent/80"
+              className="text-accent hover:text-accent/80 font-semibold text-xs"
             >
-              {expanded ? 'Hide' : 'Details'}
+              {expanded ? 'Hide Details' : 'View Details'}
             </button>
-            {hasFailedRecipients ? (
+            {hasFailedRecipients && run.status !== 'draft' ? (
               <button
                 type="button"
                 disabled
                 title={RETRY_UNAVAILABLE_REASON}
-                className="text-danger opacity-60 cursor-not-allowed"
+                className="text-danger opacity-60 cursor-not-allowed text-xs"
               >
                 Retry Failed
               </button>
@@ -294,24 +368,153 @@ function FragmentRow({
         </td>
       </tr>
       {expanded ? (
-        <tr className="border-b border-hi/40 bg-black/10">
-          <td colSpan={7} className="py-3">
+        <tr className="border-b border-hi/40 bg-black/20">
+          <td colSpan={7} className="p-4">
             {!summary ? (
-              <p className="text-sm text-muted">Loading recipient statuses...</p>
+              <div className="flex items-center gap-2 text-sm text-muted">
+                <RefreshCw className="w-4 h-4 animate-spin" /> Loading batch details...
+              </div>
             ) : (
-              <div className="space-y-2">
-                {summary.items.map((recipient) => (
+              <div className="space-y-4">
+                {/* Preflight Banner for Drafts */}
+                {run.status === 'draft' && (
                   <div
-                    key={recipient.id}
-                    className="flex items-center justify-between rounded-md border border-hi/30 px-3 py-2 text-xs"
+                    className={`p-4 rounded-xl border ${
+                      isPreflighting
+                        ? 'border-blue-500/30 bg-blue-500/10'
+                        : preflightResult?.isReady
+                          ? 'border-green-500/30 bg-green-500/10'
+                          : 'border-red-500/30 bg-red-500/10'
+                    }`}
                   >
-                    <span>{getEmployeeName(recipient)}</span>
-                    <span>
-                      {recipient.amount} {run.asset_code}
-                    </span>
-                    <span className="capitalize">{toRecipientStatus(recipient.status)}</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {isPreflighting ? (
+                          <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />
+                        ) : preflightResult?.isReady ? (
+                          <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        ) : (
+                          <AlertTriangle className="w-5 h-5 text-red-400" />
+                        )}
+                        <div>
+                          <h4 className="font-bold">
+                            {isPreflighting
+                              ? 'Running Preflight Checks...'
+                              : preflightResult?.isReady
+                                ? 'Ready to Submit'
+                                : 'Issues Detected'}
+                          </h4>
+                          <p className="text-xs text-muted mt-1">
+                            {isPreflighting
+                              ? 'Verifying balances, trustlines, and account existence.'
+                              : preflightResult?.isReady
+                                ? 'All checks passed. You can safely execute this payroll run.'
+                                : 'Please resolve the following issues before execution.'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => void performPreflight()}
+                          disabled={isPreflighting}
+                          className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded bg-white/5 hover:bg-white/10 disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`w-3.5 h-3.5 ${isPreflighting ? 'animate-spin' : ''}`}
+                          />
+                          Re-run Checks
+                        </button>
+                        {preflightResult && !preflightResult.isReady && (
+                          <button
+                            onClick={handleDownloadCsv}
+                            className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            Download Failures CSV
+                          </button>
+                        )}
+                        {preflightResult?.isReady && (
+                          <button className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold rounded bg-accent text-bg hover:brightness-110 shadow-lg shadow-accent/20">
+                            <PlayCircle className="w-3.5 h-3.5" />
+                            Execute Payroll
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {/* Org Level Issues */}
+                    {preflightResult?.orgIssues && preflightResult.orgIssues.length > 0 && (
+                      <div className="mt-3 p-3 bg-red-500/20 rounded border border-red-500/30">
+                        <h5 className="text-xs font-bold text-red-400 mb-2">
+                          Organization Wallet Issues:
+                        </h5>
+                        <ul className="list-disc list-inside text-xs text-red-300 space-y-1">
+                          {preflightResult.orgIssues.map((issue, idx) => (
+                            <li key={idx}>{issue}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
-                ))}
+                )}
+
+                {/* Recipient List */}
+                <div className="bg-black/20 rounded-lg border border-hi overflow-hidden">
+                  <div className="grid grid-cols-4 gap-4 p-3 bg-white/5 text-xs font-semibold text-muted uppercase tracking-wider">
+                    <div>Recipient</div>
+                    <div>Amount</div>
+                    <div>Status</div>
+                    <div>Preflight Result</div>
+                  </div>
+                  <div className="divide-y divide-hi/50 max-h-64 overflow-y-auto">
+                    {summary.items.map((recipient) => {
+                      const issue = preflightResult?.recipientIssues.find(
+                        (i) => i.employee_id === recipient.employee_id
+                      );
+                      return (
+                        <div
+                          key={recipient.id}
+                          className="grid grid-cols-4 gap-4 p-3 text-sm hover:bg-white/5 items-center"
+                        >
+                          <div>
+                            <div className="font-medium">{getEmployeeName(recipient)}</div>
+                            <div className="text-xs text-muted font-mono mt-0.5">
+                              {recipient.wallet_address
+                                ? `${recipient.wallet_address.slice(0, 6)}...${recipient.wallet_address.slice(-4)}`
+                                : 'No wallet linked'}
+                            </div>
+                          </div>
+                          <div className="font-mono">
+                            {recipient.amount}{' '}
+                            <span className="text-muted text-xs">{run.asset_code}</span>
+                          </div>
+                          <div>
+                            <span className="capitalize text-xs font-medium px-2 py-1 rounded bg-white/5">
+                              {toRecipientStatus(recipient.status)}
+                            </span>
+                          </div>
+                          <div>
+                            {run.status === 'draft' && preflightResult ? (
+                              issue ? (
+                                <span className="text-xs text-red-400 flex items-center gap-1.5 bg-red-500/10 px-2 py-1 rounded">
+                                  <AlertTriangle className="w-3 h-3 shrink-0" />
+                                  <span className="truncate" title={issue.reason}>
+                                    {issue.reason}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-xs text-green-400 flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3" /> Passed
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-xs text-muted">—</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
             )}
           </td>

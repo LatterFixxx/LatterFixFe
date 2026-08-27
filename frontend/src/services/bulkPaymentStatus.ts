@@ -7,6 +7,7 @@ export interface PayrollRunRecord {
   status: 'draft' | 'pending' | 'processing' | 'completed' | 'failed';
   total_amount: string;
   asset_code: string;
+  asset_issuer?: string;
   created_at: string;
 }
 
@@ -16,6 +17,7 @@ export interface PayrollRecipientStatus {
   employee_first_name?: string;
   employee_last_name?: string;
   employee_email?: string;
+  wallet_address?: string;
   amount: string;
   status: 'pending' | 'completed' | 'failed';
   tx_hash?: string;

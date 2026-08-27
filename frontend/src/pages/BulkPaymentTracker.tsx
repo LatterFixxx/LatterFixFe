@@ -55,7 +55,9 @@ export default function BulkPaymentTracker() {
   return (
     <div className="space-y-8 page-fade">
       <div className="border-b border-white/5 pb-6">
-        <h1 className="text-3xl font-black text-white tracking-tight">Bulk Payment Tracker</h1>
+        <h1 className="text-3xl font-black text-white tracking-tight">
+          Bulk Payment & Payroll Scheduling
+        </h1>
         <p className="text-xs text-muted">
           Manage your workforce, finalize a payroll batch, and track bulk payroll runs against the
           backend audit log and on-chain confirmation state from the bulk_payment contract.
