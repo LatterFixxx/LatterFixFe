@@ -6,7 +6,7 @@ export interface WalletContextType {
   isConnecting: boolean;
   isInitialized: boolean;
   walletExtensionAvailable: boolean;
-  connect: () => Promise<string | null>;
+  connect: (walletId?: unknown) => Promise<string | null>;
   requireWallet: () => Promise<string | null>;
   disconnect: () => void;
   signTransaction: (xdr: string) => Promise<string>;

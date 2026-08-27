@@ -1,12 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useWallet } from '../hooks/useWallet';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { WalletConnectModal } from './WalletConnectModal';
 
 const ConnectAccount: React.FC = () => {
-  const { address, connect, disconnect, isConnecting } = useWallet();
+  const { address, disconnect, isConnecting } = useWallet();
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const [showModal, setShowModal] = useState(false);
   const token = localStorage.getItem('payd_auth_token');
 
   const handleSocialLogout = () => {
@@ -60,9 +62,7 @@ const ConnectAccount: React.FC = () => {
       </button>
       <button
         id="tour-connect"
-        onClick={() => {
-          void connect();
-        }}
+        onClick={() => setShowModal(true)}
         disabled={isConnecting}
         className="px-6 py-2.5 bg-accent text-bg font-bold rounded-xl hover:scale-105 transition-transform shadow-lg shadow-accent/20 text-[11px] uppercase tracking-widest disabled:opacity-50"
       >
@@ -78,6 +78,7 @@ const ConnectAccount: React.FC = () => {
           </>
         )}
       </button>
+      <WalletConnectModal open={showModal} onClose={() => setShowModal(false)} />
     </div>
   );
 };

@@ -77,10 +77,21 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return;
       }
 
-      setWalletName(lastWalletName);
       setIsConnecting(true);
 
       try {
+        try {
+          newKit.setWallet(lastWalletName);
+        } catch {
+          try {
+            localStorage.removeItem(LAST_WALLET_STORAGE_KEY);
+          } catch {
+            // best-effort
+          }
+          setWalletName(null);
+          return;
+        }
+        setWalletName(lastWalletName);
         const account = await newKit.getAddress();
         if (account?.address) {
           setAddress(account.address);
@@ -100,22 +111,54 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     void attemptSilentReconnect();
   }, [network, notify, notifySuccess, extensionWarningShown]);
 
-  const connect = async (): Promise<string | null> => {
+  const connect = async (walletId?: unknown): Promise<string | null> => {
     const kit = kitRef.current;
     if (!kit) return null;
 
     setIsConnecting(true);
     try {
+      if (typeof walletId === 'string' && walletId) {
+        try {
+          kit.setWallet(walletId);
+          const { address } = await kit.getAddress();
+          setAddress(address);
+          setWalletName(walletId);
+          try {
+            localStorage.setItem(LAST_WALLET_STORAGE_KEY, walletId);
+          } catch {
+            // persistence is best-effort — connection still succeeds
+          }
+          notifySuccess(
+            'Wallet connected',
+            `${address.slice(0, 6)}...${address.slice(-4)} via ${walletId}`
+          );
+          setIsConnecting(false);
+          return address;
+        } catch (error) {
+          notifyError(
+            'Wallet connection failed',
+            error instanceof Error ? error.message : 'Please try again.'
+          );
+          setIsConnecting(false);
+          return null;
+        }
+      }
+
       const selectedAddress = await new Promise<string | null>((resolve) => {
         void kit.openModal({
           modalTitle: t('wallet.modalTitle'),
           onWalletSelected: (option) => {
             void (async () => {
               try {
+                kit.setWallet(option.id);
                 const { address } = await kit.getAddress();
                 setAddress(address);
                 setWalletName(option.id);
-                localStorage.setItem(LAST_WALLET_STORAGE_KEY, option.id);
+                try {
+                  localStorage.setItem(LAST_WALLET_STORAGE_KEY, option.id);
+                } catch {
+                  // persistence is best-effort — connection still succeeds
+                }
                 notifySuccess(
                   'Wallet connected',
                   `${address.slice(0, 6)}...${address.slice(-4)} via ${option.id}`
