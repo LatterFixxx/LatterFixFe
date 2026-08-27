@@ -143,7 +143,13 @@ export function useSorobanContract<TResult = unknown>(
         });
 
         if (!simulation.success) {
-          throw new Error(simulation.description || 'Simulation failed');
+          const simErr = new Error(simulation.description || 'Simulation failed') as Error & {
+            resultXdr?: string;
+          };
+          if (typeof simulation.envelopeXdr === 'string' && simulation.envelopeXdr.length > 0) {
+            simErr.resultXdr = simulation.envelopeXdr;
+          }
+          throw simErr;
         }
 
         const preparedTx = await rpcServer.prepareTransaction(transaction);
@@ -155,7 +161,24 @@ export function useSorobanContract<TResult = unknown>(
         const sendResponse = await rpcServer.sendTransaction(signedTx);
 
         if (sendResponse.status === 'ERROR') {
-          throw new Error('Soroban contract submission failed.');
+          const sendErr = new Error('Soroban contract submission failed.') as Error & {
+            resultXdr?: string;
+          };
+          const resp = sendResponse as unknown as {
+            errorResult?: { toXDR: (format: string) => string };
+            errorResultXdr?: string;
+          };
+          if (resp.errorResult && typeof resp.errorResult.toXDR === 'function') {
+            try {
+              const b64 = resp.errorResult.toXDR('base64');
+              if (typeof b64 === 'string' && b64.length > 0) sendErr.resultXdr = b64;
+            } catch {
+              // ignore serialization failure
+            }
+          } else if (typeof resp.errorResultXdr === 'string' && resp.errorResultXdr.length > 0) {
+            sendErr.resultXdr = resp.errorResultXdr;
+          }
+          throw sendErr;
         }
 
         let txResponse: rpc.Api.GetTransactionResponse | null = null;
@@ -173,7 +196,28 @@ export function useSorobanContract<TResult = unknown>(
         }
 
         if (txResponse.status !== rpc.Api.GetTransactionStatus.SUCCESS) {
-          throw new Error(`Transaction failed with status: ${txResponse.status}`);
+          const txErr = new Error(
+            `Transaction failed with status: ${txResponse.status}`
+          ) as Error & {
+            resultXdr?: string;
+          };
+          if (txResponse.status === rpc.Api.GetTransactionStatus.FAILED) {
+            const failed = txResponse as unknown as {
+              resultXdr?: { toXDR: (format: string) => string } | string;
+            };
+            const r = failed.resultXdr;
+            if (r && typeof (r as { toXDR?: unknown }).toXDR === 'function') {
+              try {
+                const b64 = (r as { toXDR: (f: string) => string }).toXDR('base64');
+                if (typeof b64 === 'string' && b64.length > 0) txErr.resultXdr = b64;
+              } catch {
+                // ignore serialization failure
+              }
+            } else if (typeof r === 'string' && r.length > 0) {
+              txErr.resultXdr = r;
+            }
+          }
+          throw txErr;
         }
 
         const raw = getResultValue(txResponse);
