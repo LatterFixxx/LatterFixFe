@@ -10,7 +10,9 @@ import {
   Loader2,
   Copy,
   Info,
+  Compass,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useTaskStore } from '../services/taskStore';
 import { useWallet } from '../hooks/useWallet';
 import { useHorizonAccount } from '../hooks/useHorizonAccount';
@@ -22,8 +24,9 @@ import {
 } from '../services/sorobanTaskContract';
 
 export default function Settings() {
-  const { currentUser, updateProfile } = useTaskStore();
+  const { currentUser, updateProfile, restartOnboarding } = useTaskStore();
   const { address, connect, disconnect, isConnecting } = useWallet();
+  const navigate = useNavigate();
   const { balances, isLoading: balancesLoading, accountExists } = useHorizonAccount(address);
 
   const [username, setUsername] = useState(currentUser.username);
@@ -334,6 +337,31 @@ export default function Settings() {
           </form>
         </div>
       </div>
+
+      {currentUser.role === 'Admin' && (
+        <div className="card glass noise p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center border border-accent/20 text-accent shrink-0">
+              <Compass className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Onboarding Tour</p>
+              <p className="text-xs text-muted">
+                Replay the guided tour of organization setup, employees, and payroll funding.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              restartOnboarding();
+              navigate('/dashboard');
+            }}
+            className="px-4 py-2.5 glass border-hi text-white font-bold rounded-xl hover:bg-white/5 transition-all text-xs uppercase tracking-wider shrink-0"
+          >
+            Restart Tour
+          </button>
+        </div>
+      )}
     </div>
   );
 }

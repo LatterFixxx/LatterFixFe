@@ -141,6 +141,7 @@ export const EmployeeList: React.FC<EmployeeListProps> = ({
       <div className="flex justify-between items-center p-6">
         <span className="font-bold text-lg">Employees</span>
         <button
+          id="tour-add-employee"
           onClick={() => setShowAddModal(true)}
           className="px-4 py-2 bg-accent text-bg font-bold rounded-lg text-sm hover:brightness-110 transition"
         >
