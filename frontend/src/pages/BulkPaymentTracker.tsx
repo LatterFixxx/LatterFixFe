@@ -10,6 +10,19 @@ import { PayrollScheduleCard } from '../components/PayrollScheduleCard';
 // bulkPaymentStatus.ts), so this id is a placeholder until org-scoped auth exists.
 const ORGANIZATION_ID = 1;
 
+const BATCH_ASSETS: SupportedToken[] = ['XLM', 'USDC', 'EURC'];
+
+function toBatchItem(employee: Employee, assetCode: SupportedToken): PreflightBatchItem {
+  return {
+    employeeId: employee.id,
+    employeeName: employee.name,
+    destination: employee.wallet ?? '',
+    assetCode,
+    assetIssuer: assetCode === 'XLM' ? null : KNOWN_ISSUERS[assetCode],
+    amount: (employee.salary ?? 0).toFixed(7),
+  };
+}
+
 export default function BulkPaymentTracker() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const { address, connect } = useWallet();
@@ -105,10 +118,66 @@ export default function BulkPaymentTracker() {
         </p>
       </div>
 
-      {/* Payroll Scheduling Configuration & Countdown Card */}
-      <PayrollScheduleCard />
+      <EmployeeList
+        employees={employees}
+        onAddEmployee={handleAddEmployee}
+        onEditEmployee={handleEditEmployee}
+        onRemoveEmployee={handleRemoveEmployee}
+      />
 
-      {/* On-chain Bulk Payment Status Tracker */}
+      {/* Finalize payroll batch */}
+      <div className="card glass noise p-6 space-y-4">
+        <h3 className="text-sm font-bold text-white border-b border-white/5 pb-3">
+          Finalize Payroll Batch
+          <span className="text-[10px] font-normal text-muted ml-2">
+            Runs a preflight balance check before you sign
+          </span>
+        </h3>
+
+        {!address && (
+          <p className="text-xs text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 p-3 rounded-xl">
+            Connect your organization's Stellar wallet to finalize a payroll batch.
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="text-xs font-bold uppercase tracking-widest text-muted">
+            Pay in
+            <select
+              value={batchAsset}
+              onChange={(e) => setBatchAsset(e.target.value as SupportedToken)}
+              className="ml-3 bg-black/20 border border-hi rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-accent/50"
+            >
+              {BATCH_ASSETS.map((asset) => (
+                <option key={asset} value={asset} className="bg-slate-900">
+                  {asset}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <span className="text-xs text-muted">
+            {activeEmployees.length} active employee{activeEmployees.length === 1 ? '' : 's'} in
+            batch
+          </span>
+
+          <button
+            onClick={handleFinalizeBatch}
+            disabled={!address || activeEmployees.length === 0 || isPreflightRunning}
+            className="ml-auto flex items-center gap-2 px-5 py-2.5 bg-accent text-bg font-extrabold rounded-xl hover:scale-105 transition-transform text-xs disabled:opacity-50 disabled:hover:scale-100"
+          >
+            <PlayCircle className="w-4 h-4" /> Finalize Batch &amp; Run Preflight
+          </button>
+        </div>
+      </div>
+
+      <PreflightCheckPanel
+        result={preflightResult}
+        isRunning={isPreflightRunning}
+        error={preflightError}
+        onRerun={handleFinalizeBatch}
+      />
+
       <BulkPaymentStatusTracker organizationId={ORGANIZATION_ID} />
     </div>
   );
